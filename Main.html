@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cidade Dorme - Experiência Imersiva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Creepster&family=Special+Elite&family=Inter:wght@300;400;700&display=swap');
+        
+        body {
+            background-color: #020617;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+
+        .title-font { font-family: 'Creepster', cursive; }
+        .typewriter { font-family: 'Special Elite', cursive; }
+
+        .card-night {
+            background: radial-gradient(circle at top, #1e1b4b, #020617);
+            border: 1px solid #312e81;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .blood-text {
+            color: #ef4444;
+            text-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+        }
+
+        .ambient-glow {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 150vw;
+            height: 150vh;
+            background: radial-gradient(circle, rgba(30, 27, 75, 0.2) 0%, rgba(2, 6, 23, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .active-player-glow {
+            animation: pulse-red 2s infinite;
+        }
+
+        .role-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4">
+    <div class="ambient-glow"></div>
+
+    <div id="app" class="w-full max-w-md">
+        <!-- Header Animado -->
+        <header class="text-center my-8 transition-all duration-700" id="game-header">
+            <h1 class="text-6xl blood-text title-font mb-2">Cidade Dorme</h1>
+            <p id="sub-label" class="text-indigo-400 text-sm tracking-widest uppercase typewriter">A névoa está subindo...</p>
+        </header>
+
+        <!-- TELA 1: SETUP -->
+        <div id="setup-view" class="card-night p-8 rounded-3xl shadow-2xl border-t-4 border-indigo-500">
+            <h2 class="text-2xl font-bold mb-6 flex items-center justify-center">
+                <span class="mr-3">🎮</span> Reúna a Família
+            </h2>
+            <div id="player-inputs" class="space-y-4"></div>
+            <button onclick="startGame()" class="w-full mt-8 bg-indigo-900 hover:bg-indigo-800 text-white font-bold py-4 rounded-xl transition-all border border-indigo-400 shadow-[0_0_15px_rgba(79,70,229,0.3)]">
+                Iniciar Jogo
+            </button>
+        </div>
+
+        <!-- TELA 2: REVELAÇÃO E AÇÕES (MODO NOITE) -->
+        <div id="reveal-view" class="hidden card-night p-8 rounded-3xl shadow-2xl text-center border-t-4 border-red-900">
+            <div id="night-overlay" class="mb-4">
+                <span class="text-5xl">🌙</span>
+            </div>
+            <h2 class="text-lg font-medium mb-1 text-indigo-300">Silêncio... Entregue para:</h2>
+            <div id="current-player-name" class="text-4xl font-bold text-white mb-8 title-font tracking-wide"></div>
+            
+            <div id="role-box" class="hidden space-y-6">
+                <div class="p-6 bg-black/40 rounded-2xl border border-white/10 backdrop-blur-sm">
+                    <!-- Acessibilidade: Ícone grande -->
+                    <span id="role-visual-icon" class="role-icon"></span>
+                    
+                    <p class="text-xs uppercase tracking-widest text-indigo-400 mb-2">Seu Papel</p>
+                    <div id="role-title" class="text-5xl font-black title-font blood-text mb-2"></div>
+                    <p id="role-desc" class="text-slate-300 text-sm italic"></p>
+                    
+                    <!-- Botão de Voz para Rafaela -->
+                    <button onclick="speakRole()" class="mt-4 bg-slate-700 p-3 rounded-full hover:bg-slate-600 transition-colors" title="Ouvir papel">
+                        <span class="text-2xl">🔊</span>
+                    </button>
+                </div>
+                
+                <div id="night-action-container" class="hidden space-y-4">
+                    <div class="h-px bg-gradient-to-r from-transparent via-indigo-500 to-transparent my-4"></div>
+                    <p class="text-yellow-500 font-bold typewriter text-sm">Realize sua tarefa em segredo:</p>
+                    <div id="action-targets" class="grid grid-cols-1 gap-2"></div>
+                    <p id="investigation-result" class="p-4 bg-blue-900/30 border border-blue-500 rounded-lg text-blue-300 font-bold hidden"></p>
+                </div>
+
+                <div id="citizen-sleep" class="hidden py-10 opacity-60">
+                    <p class="typewriter text-sm">Você está dormindo profundamente...<br>Não faça barulho.</p>
+                </div>
+            </div>
+
+            <div class="mt-8 space-y-3">
+                <button id="reveal-btn" onclick="toggleReveal()" class="w-full bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-4 rounded-xl transition-all active-player-glow">
+                    Ver Papel
+                </button>
+                <button id="next-player-btn" onclick="finishTurn()" class="hidden w-full bg-red-900 hover:bg-red-800 text-white font-bold py-4 rounded-xl transition-all">
+                    Passar Celular
+                </button>
+            </div>
+        </div>
+
+        <!-- TELA 3: AMANHECER E VOTAÇÃO -->
+        <div id="day-view" class="hidden card-night p-8 rounded-3xl shadow-2xl border-t-4 border-yellow-600">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl title-font text-yellow-500">O Sol Nasceu</h2>
+                <div id="turn-display" class="text-xs bg-yellow-900/50 text-yellow-200 px-3 py-1 rounded-full border border-yellow-700">Turno 1</div>
+            </div>
+
+            <div id="morning-news" class="bg-black/40 p-5 rounded-2xl border-l-4 border-red-600 mb-8 text-slate-200 typewriter text-sm leading-relaxed"></div>
+
+            <div id="voting-section" class="space-y-4">
+                <h3 class="font-bold text-center text-indigo-300 uppercase tracking-tighter text-sm mb-4">Urna da Cidade: Quem deve sair?</h3>
+                <div id="alive-players-list" class="grid grid-cols-1 gap-3"></div>
+            </div>
+
+            <button id="btn-end-day" onclick="handleVotingResult()" class="w-full mt-8 bg-slate-800 hover:bg-slate-700 text-white font-bold py-4 rounded-xl transition-all border border-slate-600 opacity-50">
+                Aguardando Votos...
+            </button>
+        </div>
+
+        <!-- TELA 4: GAME OVER -->
+        <div id="gameover-view" class="hidden card-night p-10 rounded-3xl shadow-2xl text-center border-t-4 border-red-600">
+            <h2 class="text-6xl title-font blood-text mb-6">Fim da Linha</h2>
+            <div id="winner-msg" class="text-2xl font-bold mb-8 text-white typewriter"></div>
+            <button onclick="location.reload()" class="w-full bg-white text-black font-bold py-4 rounded-xl transition-all hover:bg-slate-200">
+                Nova Partida
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let players = [];
+        let turn = 1;
+        let currentPlayerIdx = 0;
+        let gameState = 'setup';
+        let votes = {};
+        
+        let nightData = { target: null, protected: null };
+
+        // Ícone trocado para Máscara 🎭 (mais leve)
+        const rolesConfig = [
+            { id: 'assassino', title: 'Assassino', desc: 'Escolha uma pessoa para tirar do jogo.', icon: '🎭', voice: 'Você é o Assassino. Escolha alguém para tirar do jogo.' },
+            { id: 'detetive', title: 'Detetive', desc: 'Tente descobrir quem é o assassino.', icon: '🔍', voice: 'Você é a Detetive. Investigue alguém para saber se é perigoso.' },
+            { id: 'anjo', title: 'Anjo', desc: 'Proteja alguém para não sair do jogo.', icon: '🛡️', voice: 'Você é o Anjo. Escolha alguém para proteger.' },
+            { id: 'cidadao', title: 'Cidadão', desc: 'Durma e tente descobrir quem é o culpado de dia.', icon: '🏠', voice: 'Você é uma Cidadã. Apenas durma e tente descobrir quem é o culpado amanhã.' },
+            { id: 'cidadao', title: 'Cidadão', desc: 'Durma e tente descobrir quem é o culpado de dia.', icon: '🏠', voice: 'Você é um Cidadão. Apenas durma e tente descobrir quem é o culpado amanhã.' }
+        ];
+
+        const interferencias = [
+            "Alguém fez um barulho estranho...",
+            "O mistério aumenta na cidade.",
+            "Quem será que está mentindo?",
+            "Cuidado com quem você confia.",
+            "A noite foi muito silenciosa."
+        ];
+
+        function init() {
+            const container = document.getElementById('player-inputs');
+            const defaultNames = ["Pai", "Mãe", "Samuel", "Rafaela", "Davi"];
+            for(let i = 0; i < 5; i++) {
+                container.innerHTML += `
+                    <div class="relative">
+                        <input type="text" id="p${i}" value="${defaultNames[i]}" placeholder="Nome" 
+                        class="w-full bg-slate-900/50 border border-indigo-900/50 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all pl-12">
+                        <span class="absolute left-4 top-4 opacity-30">👤</span>
+                    </div>`;
+            }
+        }
+
+        function speakRole() {
+            const player = players[currentPlayerIdx];
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(player.role.voice);
+                utterance.lang = 'pt-BR';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function startGame() {
+            players = [];
+            const shuffledRoles = [...rolesConfig].sort(() => Math.random() - 0.5);
+            
+            for(let i = 0; i < 5; i++) {
+                const name = document.getElementById(`p${i}`).value || `Jogador ${i+1}`;
+                players.push({ id: i, name, role: shuffledRoles[i], alive: true });
+            }
+
+            gameState = 'reveal_roles';
+            currentPlayerIdx = 0;
+            updateRevealView();
+            showView('reveal-view');
+            updateHeader("Cidade Dormindo", "text-red-500");
+        }
+
+        function updateHeader(text, colorClass) {
+            const label = document.getElementById('sub-label');
+            label.innerText = text;
+            label.className = `text-sm tracking-widest uppercase typewriter ${colorClass}`;
+        }
+
+        function showView(viewId) {
+            ['setup-view', 'reveal-view', 'day-view', 'gameover-view'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(viewId).classList.remove('hidden');
+            window.scrollTo(0,0);
+        }
+
+        function updateRevealView() {
+            const player = players[currentPlayerIdx];
+            document.getElementById('current-player-name').innerText = player.name;
+            document.getElementById('role-box').classList.add('hidden');
+            document.getElementById('reveal-btn').classList.remove('hidden');
+            document.getElementById('next-player-btn').classList.add('hidden');
+            document.getElementById('night-action-container').classList.add('hidden');
+            document.getElementById('investigation-result').classList.add('hidden');
+            document.getElementById('citizen-sleep').classList.add('hidden');
+
+            document.getElementById('role-visual-icon').innerText = player.role.icon;
+            document.getElementById('role-title').innerText = player.role.title;
+            document.getElementById('role-desc').innerText = player.role.desc;
+
+            if (gameState === 'night_actions' && player.alive) {
+                if (['assassino', 'detetive', 'anjo'].includes(player.role.id)) {
+                    setupNightAction(player);
+                } else {
+                    document.getElementById('citizen-sleep').classList.remove('hidden');
+                }
+            }
+        }
+
+        function setupNightAction(player) {
+            const container = document.getElementById('night-action-container');
+            const targetsDiv = document.getElementById('action-targets');
+            container.classList.remove('hidden');
+            targetsDiv.innerHTML = "";
+            
+            players.forEach(p => {
+                if (p.alive && p.id !== player.id) {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full text-left p-4 bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/30 rounded-xl text-lg transition-all flex justify-between items-center";
+                    btn.innerHTML = `<span>👤 ${p.name}</span> <span class="text-xs opacity-50">Escolher</span>`;
+                    btn.onclick = () => handleAction(player.role.id, p);
+                    targetsDiv.appendChild(btn);
+                }
+            });
+        }
+
+        function handleAction(roleId, target) {
+            if (roleId === 'assassino') nightData.target = target.id;
+            if (roleId === 'anjo') nightData.protected = target.id;
+            if (roleId === 'detetive') {
+                const res = document.getElementById('investigation-result');
+                res.classList.remove('hidden');
+                res.innerHTML = target.role.id === 'assassino' ? "🚨 ATENÇÃO: É o Assassino!" : "✅ SEGURO: É um Cidadão.";
+            }
+            const btns = document.getElementById('action-targets').querySelectorAll('button');
+            btns.forEach(b => {
+                b.classList.add('opacity-30', 'pointer-events-none');
+                if(b.innerText.includes(target.name)) b.classList.add('border-yellow-500', 'opacity-100', 'bg-indigo-800');
+            });
+        }
+
+        function toggleReveal() {
+            document.getElementById('role-box').classList.remove('hidden');
+            document.getElementById('reveal-btn').classList.add('hidden');
+            document.getElementById('next-player-btn').classList.remove('hidden');
+        }
+
+        function finishTurn() {
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            
+            currentPlayerIdx++;
+            if (currentPlayerIdx < players.length) {
+                updateRevealView();
+            } else {
+                // Se acabou de revelar papéis, pula votação e vai para a Noite 1
+                if (gameState === 'reveal_roles') {
+                    startNightCycle();
+                } else {
+                    processNight();
+                }
+            }
+        }
+
+        function startNightCycle() {
+            gameState = 'night_actions';
+            currentPlayerIdx = 0;
+            nightData = { target: null, protected: null };
+            updateHeader("Cidade Dormindo", "text-indigo-400");
+            updateRevealView();
+            showView('reveal-view');
+        }
+
+        function processNight() {
+            gameState = 'day';
+            let news = "";
+            const interferencia = interferencias[Math.floor(Math.random() * interferencias.length)];
+            
+            if (nightData.target !== null) {
+                if (nightData.target === nightData.protected) {
+                    news = `O Assassino tentou agir, mas o Anjo protegeu a pessoa! Ninguém saiu do jogo. <br><br><i>"${interferencia}"</i>`;
+                } else {
+                    const victim = players.find(p => p.id === nightData.target);
+                    victim.alive = false;
+                    news = `O sol nasceu com notícias tristes. <b>${victim.name}</b> teve que sair da cidade. <br><br><i>"${interferencia}"</i>`;
+                }
+            } else {
+                news = `Uma noite muito tranquila. Todos continuam na cidade. <br><br><i>"${interferencia}"</i>`;
+            }
+
+            document.getElementById('morning-news').innerHTML = news;
+            updateHeader("Hora de Conversar", "text-yellow-500");
+            
+            votes = {};
+            renderDayList();
+            showView('day-view');
+            checkGameOver();
+        }
+
+        function renderDayList() {
+            const list = document.getElementById('alive-players-list');
+            const btnEnd = document.getElementById('btn-end-day');
+            list.innerHTML = "";
+            
+            players.forEach(p => {
+                const voteCount = votes[p.id] || 0;
+                list.innerHTML += `
+                    <div onclick="${p.alive ? `castVote(${p.id})` : ''}" 
+                        class="p-4 rounded-xl flex justify-between items-center transition-all ${p.alive ? 'bg-slate-800/80 cursor-pointer border border-slate-700 hover:border-yellow-600' : 'bg-black/40 opacity-40 border border-transparent'}">
+                        <div class="flex items-center">
+                            <span class="text-2xl mr-3">${p.alive ? '👤' : '💀'}</span>
+                            <span class="font-bold text-lg">${p.name}</span>
+                        </div>
+                        <div class="flex items-center">
+                            ${voteCount > 0 ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded-full mr-2 font-black">${voteCount}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            const totalVotes = Object.values(votes).reduce((a, b) => a + b, 0);
+            const aliveCount = players.filter(p => p.alive).length;
+
+            if (totalVotes >= aliveCount) {
+                btnEnd.classList.remove('opacity-50');
+                btnEnd.innerText = "Ver Resultado";
+            } else {
+                btnEnd.classList.add('opacity-50');
+                btnEnd.innerText = `Votos: ${totalVotes}/${aliveCount}`;
+            }
+        }
+
+        function castVote(targetId) {
+            votes[targetId] = (votes[targetId] || 0) + 1;
+            renderDayList();
+        }
+
+        function handleVotingResult() {
+            const aliveCount = players.filter(p => p.alive).length;
+            const totalVotes = Object.values(votes).reduce((a, b) => a + b, 0);
+            if (totalVotes < aliveCount) return;
+
+            // Lógica de Votos
+            let counts = Object.entries(votes).map(([id, count]) => ({ id: parseInt(id), count }));
+            counts.sort((a, b) => b.count - a.count);
+
+            let msg = "";
+            // REGRA DE EMPATE: Se os dois primeiros empatarem, ninguém sai
+            if (counts.length > 1 && counts[0].count === counts[1].count) {
+                msg = "Houve um EMPATE na votação! Ninguém será eliminado desta vez.";
+            } else if (counts.length > 0) {
+                const p = players.find(player => player.id == counts[0].id);
+                p.alive = false;
+                msg = `${p.name} foi a pessoa mais votada e saiu do jogo!`;
+            }
+
+            const overlay = document.createElement('div');
+            overlay.className = "fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-6 text-center";
+            overlay.innerHTML = `<div><h2 class="text-4xl title-font blood-text mb-4">Votação Finalizada</h2><p class="text-2xl text-white">${msg}</p><button id="close-overlay" class="mt-8 bg-white text-black px-8 py-3 rounded-lg font-bold">Continuar</button></div>`;
+            document.body.appendChild(overlay);
+
+            document.getElementById('close-overlay').onclick = () => {
+                overlay.remove();
+                if(!checkGameOver()) {
+                    startNightCycle();
+                }
+            };
+        }
+
+        function checkGameOver() {
+            const alive = players.filter(p => p.alive);
+            const assassin = alive.find(p => p.role.id === 'assassino');
+            
+            if (!assassin) {
+                showGameOver("VITÓRIA DOS CIDADÃOS! O mistério acabou.");
+                return true;
+            } else if (alive.length <= 2) {
+                showGameOver(`VITÓRIA DO ASSASSINO! ${assassin.name} venceu.`);
+                return true;
+            }
+            return false;
+        }
+
+        function showGameOver(msg) {
+            showView('gameover-view');
+            document.getElementById('winner-msg').innerText = msg;
+            updateHeader("Fim do Jogo", "text-white");
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
